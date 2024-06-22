@@ -1,0 +1,6 @@
+*.png
+*.csv
+/output
+!test.csv
+*.xml
+*.log
