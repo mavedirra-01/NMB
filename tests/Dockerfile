@@ -1,5 +1,5 @@
 # Use the official Golang image to build the Go app
-FROM golang:1.22 as builder
+FROM golang:1.20 as builder
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y nmap && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/nmb /usr/local/bin/nmb
 
 # Copy the test CSV file from the tests directory
-COPY tests/t.csv /app/t.csv
+COPY tests/test.csv /app/test.csv
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
@@ -36,4 +36,4 @@ WORKDIR /app
 RUN mkdir -p /app/output
 
 # Command to run the executable with t.csv and display the report
-CMD ["sh", "-c", "nmb -nessus /app/t.csv && cat /app/output/NMB_scan_report.md"]
+CMD ["sh", "-c", "nmb -nessus /app/test.csv && cat /app/output/NMB_scan_report.md"]
