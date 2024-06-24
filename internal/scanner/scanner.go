@@ -28,27 +28,28 @@ func (s *Scanner) RunScans(wg *sync.WaitGroup, jobs <-chan nessus.Finding) {
 	verifiedPlugins := make(map[string]bool)
 
 	for finding := range jobs {
-		if verifiedPlugins[finding.PluginID] {
+		if verifiedPlugins[finding.PluginID] || !s.isInPluginData(finding.PluginID) {
 			continue
 		}
 
 		for _, plugin := range s.Config.Plugins {
 			if contains(plugin.IDs, finding.PluginID) {
-				for _, hostFinding := range s.Findings {
-					if hostFinding.PluginID == finding.PluginID {
-						success := s.executeScan(plugin, hostFinding, false)
-						if !success && plugin.ScanType == "nmap -T4 --host-timeout 300s" {
-							logging.WarningLogger.Printf("Initial scan failed for %s, retrying with -Pn", hostFinding.Name)
-							s.executeScan(plugin, hostFinding, true)
-						}
-					}
-				}
-				if verifiedPlugins[finding.PluginID] {
+				if s.verifyFinding(plugin, finding) {
+					verifiedPlugins[finding.PluginID] = true
 					break
 				}
 			}
 		}
 	}
+}
+
+func (s *Scanner) verifyFinding(plugin config.Plugin, finding nessus.Finding) bool {
+	success := s.executeScan(plugin, finding, false)
+	if !success && plugin.ScanType == "nmap -T4 --host-timeout 300s" {
+		logging.WarningLogger.Printf("Initial scan failed for %s, retrying with -Pn", finding.Name)
+		success = s.executeScan(plugin, finding, true)
+	}
+	return success
 }
 
 func (s *Scanner) executeScan(plugin config.Plugin, hostFinding nessus.Finding, retry bool) bool {
@@ -88,7 +89,7 @@ func (s *Scanner) executeScan(plugin config.Plugin, hostFinding nessus.Finding, 
 	}
 
 	if verifyOutput(output, plugin.VerifyWords) {
-		logging.SuccessLogger.Printf("Verified: %s (%s:%s)", hostFinding.PluginID, hostFinding.Host, hostFinding.Port)
+		logging.SuccessLogger.Printf("Verified: %s (%s:%s)", hostFinding.Name, hostFinding.Host, hostFinding.Port)
 		pluginNameHash := md5.Sum([]byte(strings.ToLower(hostFinding.Name)))
 		pluginNameHashStr := fmt.Sprintf("%x", pluginNameHash)
 		screenshotPath := fmt.Sprintf("%s.png", pluginNameHashStr)
@@ -148,4 +149,9 @@ func verifyOutput(output string, words []string) bool {
 
 func isPortOpen(output, port string) bool {
 	return strings.Contains(output, fmt.Sprintf("%s/tcp open", port))
+}
+
+func (s *Scanner) isInPluginData(pluginID string) bool {
+	_, exists := s.PluginData[pluginID]
+	return exists
 }
